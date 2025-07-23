@@ -1,0 +1,149 @@
+services:
+  # Database Service
+  db:
+    image: mysql:8.3
+    container_name: app_db
+    env_file: .env
+    environment:
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/my.cnf:/etc/mysql/conf.d/my.cnf:ro
+      - ./db/movie28.sql:/docker-entrypoint-initdb.d/movie28.sql
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+  # Redis Service
+  redis:
+    image: redis:7.2-alpine
+    container_name: app_redis
+    ports:
+      - "6379:6379"
+    env_file:
+      - .env
+    environment:
+      - REDIS_DB=${REDIS_DB}
+      - REDIS_USER=${REDIS_USER}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+      - ./redis/config.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf --appendonly yes
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.0
+    container_name: app_elasticsearch
+    environment:
+      - node.name=movie28_es
+      - cluster.name=docker-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+      #- ./es/movies.ndjson:/usr/share/elasticsearch/movies.ndjson
+    ports:
+      - "9200:9200"
+   
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - app-network
+  es-init:
+    image: curlimages/curl
+    container_name: app_es_init
+    volumes:
+    - ./es:/data:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+        echo '📂 Checking /data directory...';
+        ls -l /data;
+        if [ ! -f /data/movies.ndjson ] || [ ! -f /data/movies.mapping.json ]; then
+          echo '❌ Error: movies.ndjson or movies.mapping.json not found.';
+          exit 1;
+        fi;
+        echo '🔎 Checking if index movies exists...';
+        if [ $(curl -s -o /dev/null -w '%{http_code}' http://elasticsearch:9200/movies) -eq 404 ]; then
+          echo '🚀 Creating index movies...';
+          curl -XPUT http://elasticsearch:9200/movies \
+            -H 'Content-Type: application/json' \
+            -d @/data/movies.mapping.json;
+          if [ $? -eq 0 ]; then
+            echo '✅ Index movies created.';
+          else
+            echo '❌ Failed to create index.';
+            exit 1;
+          fi;
+        else
+          echo '✅ Index movies already exists.';
+          exit 0;
+        fi;
+        echo '📦 Importing data...';
+        curl -s -H 'Content-Type: application/x-ndjson' \
+            -XPOST 'http://elasticsearch:9200/_bulk?pretty&refresh=true' \
+            --data-binary @/data/movies.ndjson;
+        if [ $? -eq 0 ]; then
+          echo '✅ Import done.';
+        else
+          echo '❌ Import failed.';
+          exit 1;
+        fi;
+      "
+    networks:
+      - app-network
+    restart: "no"
+networks:
+  app-network:
+    driver: bridge
+volumes:
+  mysql_data:
+  redis_data:
+  es_data:
