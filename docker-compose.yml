@@ -104,36 +104,32 @@ services:
         condition: service_healthy
     entrypoint: >
       sh -c "
-        echo '📂 Checking /data directory...';
+        echo '📂 Kiểm tra thư mục /data...';
         ls -l /data;
         if [ ! -f /data/movies.ndjson ] || [ ! -f /data/movies.mapping.json ]; then
-          echo '❌ Error: movies.ndjson or movies.mapping.json not found.';
+          echo '❌ Lỗi: Không tìm thấy movies.ndjson hoặc movies.mapping.json.';
           exit 1;
         fi;
-        echo '🔎 Checking if index movies exists...';
+        echo '🔎 Kiểm tra xem index movies có tồn tại...';
         if [ $(curl -s -o /dev/null -w '%{http_code}' http://elasticsearch:9200/movies) -eq 404 ]; then
-          echo '🚀 Creating index movies...';
-          curl -XPUT http://elasticsearch:9200/movies \
-            -H 'Content-Type: application/json' \
-            -d @/data/movies.mapping.json;
+          echo '🚀 Tạo index movies...';
+          curl -XPUT http://elasticsearch:9200/movies -H 'Content-Type: application/json' -d @/data/movies.mapping.json;
           if [ $? -eq 0 ]; then
-            echo '✅ Index movies created.';
+            echo '✅ Đã tạo index movies.';
           else
-            echo '❌ Failed to create index.';
+            echo '❌ Tạo index thất bại.';
             exit 1;
           fi;
         else
-          echo '✅ Index movies already exists.';
+          echo '✅ Index movies đã tồn tại.';
           exit 0;
         fi;
-        echo '📦 Importing data...';
-        curl -s -H 'Content-Type: application/x-ndjson' \
-            -XPOST 'http://elasticsearch:9200/_bulk?pretty&refresh=true' \
-            --data-binary @/data/movies.ndjson;
+        echo '📦 Nhập dữ liệu...';
+        curl -s -H 'Content-Type: application/x-ndjson' -XPOST 'http://elasticsearch:9200/_bulk?pretty&refresh=true' --data-binary @/data/movies.ndjson;
         if [ $? -eq 0 ]; then
-          echo '✅ Import done.';
+          echo '✅ Nhập dữ liệu hoàn tất.';
         else
-          echo '❌ Import failed.';
+          echo '❌ Nhập dữ liệu thất bại.';
           exit 1;
         fi;
       "
