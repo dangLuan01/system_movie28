@@ -94,48 +94,65 @@ services:
         max-file: "3"
     networks:
       - app-network
-  es-init:
-    image: curlimages/curl
-    container_name: app_es_init
+  # es-init:
+  #   image: curlimages/curl
+  #   container_name: app_es_init
+  #   volumes:
+  #   - ./es:/data:ro
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
+  #   entrypoint: >
+  #     sh -c "
+  #       echo '📂 Kiểm tra thư mục /data...';
+  #       ls -l /data;
+  #       if [ ! -f /data/movies.ndjson ] || [ ! -f /data/movies.mapping.json ]; then
+  #         echo '❌ Lỗi: Không tìm thấy movies.ndjson hoặc movies.mapping.json.';
+  #         exit 1;
+  #       fi;
+  #       echo '🔎 Kiểm tra xem index movies có tồn tại...';
+  #       if [ $(curl -s -o /dev/null -w '%{http_code}' http://elasticsearch:9200/movies) -eq 404 ]; then
+  #         echo '🚀 Tạo index movies...';
+  #         curl -XPUT http://elasticsearch:9200/movies -H 'Content-Type: application/json' -d @/data/movies.mapping.json;
+  #         if [ $? -eq 0 ]; then
+  #           echo '✅ Đã tạo index movies.';
+  #         else
+  #           echo '❌ Tạo index thất bại.';
+  #           exit 1;
+  #         fi;
+  #       else
+  #         echo '✅ Index movies đã tồn tại.';
+  #         exit 0;
+  #       fi;
+  #       echo '📦 Nhập dữ liệu...';
+  #       curl -s -H 'Content-Type: application/x-ndjson' -XPOST 'http://elasticsearch:9200/_bulk?pretty&refresh=true' --data-binary @/data/movies.ndjson;
+  #       if [ $? -eq 0 ]; then
+  #         echo '✅ Nhập dữ liệu hoàn tất.';
+  #       else
+  #         echo '❌ Nhập dữ liệu thất bại.';
+  #         exit 1;
+  #       fi;
+  #     "
+  #   networks:
+  #     - app-network
+  #   restart: "no"
+  app:
+    build:
+      context: ./28movies.backend
+      dockerfile: Dockerfile
+    image: laravel-app
+    container_name: laravel_app
+    working_dir: /app
     volumes:
-    - ./es:/data:ro
-    depends_on:
-      elasticsearch:
-        condition: service_healthy
-    entrypoint: >
-      sh -c "
-        echo '📂 Kiểm tra thư mục /data...';
-        ls -l /data;
-        if [ ! -f /data/movies.ndjson ] || [ ! -f /data/movies.mapping.json ]; then
-          echo '❌ Lỗi: Không tìm thấy movies.ndjson hoặc movies.mapping.json.';
-          exit 1;
-        fi;
-        echo '🔎 Kiểm tra xem index movies có tồn tại...';
-        if [ $(curl -s -o /dev/null -w '%{http_code}' http://elasticsearch:9200/movies) -eq 404 ]; then
-          echo '🚀 Tạo index movies...';
-          curl -XPUT http://elasticsearch:9200/movies -H 'Content-Type: application/json' -d @/data/movies.mapping.json;
-          if [ $? -eq 0 ]; then
-            echo '✅ Đã tạo index movies.';
-          else
-            echo '❌ Tạo index thất bại.';
-            exit 1;
-          fi;
-        else
-          echo '✅ Index movies đã tồn tại.';
-          exit 0;
-        fi;
-        echo '📦 Nhập dữ liệu...';
-        curl -s -H 'Content-Type: application/x-ndjson' -XPOST 'http://elasticsearch:9200/_bulk?pretty&refresh=true' --data-binary @/data/movies.ndjson;
-        if [ $? -eq 0 ]; then
-          echo '✅ Nhập dữ liệu hoàn tất.';
-        else
-          echo '❌ Nhập dữ liệu thất bại.';
-          exit 1;
-        fi;
-      "
+      - ./28movies.backend:/app
+    ports:
+      - "3000:9000"
     networks:
       - app-network
-    restart: "no"
+    depends_on:
+      - db
+    env_file:
+      - ./28movies.backend/.env
 networks:
   app-network:
     driver: bridge
