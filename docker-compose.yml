@@ -143,8 +143,8 @@ services:
     image: laravel-app
     container_name: laravel_app
     working_dir: /app
-    volumes:
-      - ./28movies.backend:/app
+    # volumes:
+    #   - ./28movies.backend:/app
     ports:
       - "3000:9000"
     networks:
