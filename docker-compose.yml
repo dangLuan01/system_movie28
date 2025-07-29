@@ -153,6 +153,17 @@ services:
       - db
     env_file:
       - ./28movies.backend/.env
+  queue:
+    image: laravel-app
+    container_name: laravel_queue
+    working_dir: /app
+    command: php artisan queue:work --sleep=3 --tries=3 --timeout=60
+    networks:
+      - app-network
+    depends_on:
+      - app
+    env_file:
+      - ./28movies.backend/.env
   nginx:
     image: nginx:latest
     container_name: laravel_nginx
