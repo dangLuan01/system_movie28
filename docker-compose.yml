@@ -179,7 +179,8 @@ services:
       - app
 networks:
   app-network:
-    driver: bridge
+    external: true
+    name: app-network
 volumes:
   mysql_data:
   redis_data:
