@@ -154,6 +154,8 @@ services:
     image: nginxproxy/acme-companion
     container_name: nginx-proxy-acme
     restart: always
+    env_file:
+      - .env
     environment:
       - DEFAULT_EMAIL
     volumes:
