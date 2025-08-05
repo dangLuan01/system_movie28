@@ -1,3 +1,4 @@
 *.txt
 .env
 28movies.backend
+*.sql
